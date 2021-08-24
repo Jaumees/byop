@@ -17,7 +17,7 @@
 #echo 'src-git helloworld https://github.com/fw876/helloworld' >>feeds.conf.default
 echo 'src-git passwall https://github.com/xiaorouji/openwrt-passwall' >>feeds.conf.default
 
-WORKINGDIR="`pwd`/packages/smartdnssou"
+WORKINGDIR="package/smartdnssou"
 mkdir $WORKINGDIR -p
 wget https://github.com/pymumu/openwrt-smartdns/archive/master.zip -O $WORKINGDIR/master.zip
 wget https://github.com/pymumu/luci-app-smartdns/archive/lede.zip -O $WORKINGDIR/lede.zip
