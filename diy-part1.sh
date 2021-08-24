@@ -21,8 +21,8 @@ WORKINGDIR="`pwd`/packages/smartdnssou"
 mkdir $WORKINGDIR -p
 wget https://github.com/pymumu/openwrt-smartdns/archive/master.zip -O $WORKINGDIR/master.zip
 wget https://github.com/pymumu/luci-app-smartdns/archive/lede.zip -O $WORKINGDIR/lede.zip
-unzip $WORKINGDIR/master.zip
-unzip $WORKINGDIR/lede.zip
+unzip $WORKINGDIR/master.zip -d $WORKINGDIR
+unzip $WORKINGDIR/lede.zip -d $WORKINGDIR
 rm $WORKINGDIR/master.zip
 rm $WORKINGDIR/lede.zip
 
