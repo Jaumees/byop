@@ -29,3 +29,8 @@ unzip $WORKINGDIR/lede.zip -d $WORKINGDIR
 rm $WORKINGDIR/master.zip
 rm $WORKINGDIR/lede.zip
 
+WORKINGDIR="package/mosdnssou"
+mkdir $WORKINGDIR -p
+wget https://github.com/QiuSimons/openwrt-mos/archive/master.zip -O $WORKINGDIR/master.zip
+unzip $WORKINGDIR/master.zip -d $WORKINGDIR
+rm $WORKINGDIR/master.zip
