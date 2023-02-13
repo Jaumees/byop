@@ -16,5 +16,6 @@
 # Add a feed source
 #echo 'src-git helloworld https://github.com/fw876/helloworld' >>feeds.conf.default
 echo 'src-git passwall https://github.com/xiaorouji/openwrt-passwall' >>feeds.conf.default
+echo 'src-git passwall-luci https://github.com/xiaorouji/openwrt-passwall/tree/luci' >>feeds.conf.default
 echo 'src-git mosdns https://github.com/QiuSimons/openwrt-mos' >>feeds.conf.default
 
