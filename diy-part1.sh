@@ -16,10 +16,5 @@
 # Add a feed source
 #echo 'src-git helloworld https://github.com/fw876/helloworld' >>feeds.conf.default
 echo 'src-git passwall https://github.com/xiaorouji/openwrt-passwall' >>feeds.conf.default
+echo 'src-git passwall-packages https://github.com/xiaorouji/openwrt-passwall-packages' >>feeds.conf.default
 echo 'src-git mosdns https://github.com/QiuSimons/openwrt-mos' >>feeds.conf.default
-
-WORKINGDIR="package/lucipasswall"
-mkdir $WORKINGDIR -p
-wget https://github.com/xiaorouji/openwrt-passwall/archive/refs/heads/luci.zip -O $WORKINGDIR/master.zip
-unzip $WORKINGDIR/master.zip -d $WORKINGDIR
-rm $WORKINGDIR/master.zip
