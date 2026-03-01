@@ -4,7 +4,6 @@
 # This is free software, licensed under the MIT License.
 # See /LICENSE for more information.
 #
-# https://github.com/P3TERX/Actions-OpenWrt
 # Description: Build OpenWrt using GitHub Actions
 #
 
@@ -16,10 +15,16 @@ on:
     inputs:
       ssh:
         description: 'SSH connection to Actions'
-        required: true
-        default: 'false'
+        required: false
+        type: boolean
+        default: false
   schedule:
     - cron: 0 19 * * *
+
+# 赋予 GitHub Token 必要的读写权限，否则 Releases 和删除旧 Action 会因为权限不足失败
+permissions:
+  contents: write
+  actions: write
 
 env:
   REPO_URL: https://github.com/coolsnowwolf/lede
@@ -41,29 +46,34 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@main
+      uses: actions/checkout@v4 # 升级到 v4 避免 Node.js 16 弃用警告
 
     - name: Initialization environment
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
-          docker rmi `docker images -q`
-          [[ -n "${AGENT_TOOLSDIRECTORY}" ]] && sudo rm -rf "${AGENT_TOOLSDIRECTORY}"
-          sudo rm -rf /usr/share/dotnet /etc/apt/sources.list.d /usr/local/lib/android 2>/dev/null
-          sudo -E apt-get -y update
-          sudo -E apt-get -y purge azure-cli ghc* zulu* llvm* firefox google* dotnet* powershell openjdk* mongodb* moby* || true
-          sudo -E apt-get -y install $(curl -fsSL https://is.gd/depend_ubuntu2204_openwrt)
-          sudo -E systemctl daemon-reload
-          #sudo -E apt-get -y full-upgrade
-          sudo -E apt-get -y autoremove --purge
-          sudo -E apt-get clean
-          sudo mkdir -p /workdir
-          sudo chown ${USER}:${GROUPS} /workdir
-          sudo timedatectl set-timezone "${TZ}"
-          echo "status=success" >> ${GITHUB_OUTPUT}
+        # 1. 修复 docker rmi 报错 (加上 || true)
+        docker rmi `docker images -q` || true
+        
+        # 2. 强力清理不必要的环境，释放超大磁盘空间 (OpenWrt 编译极其吃空间)
+        sudo rm -rf /usr/share/dotnet /etc/mysql /etc/php /etc/apt/sources.list.d /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL 2>/dev/null
+        sudo -E apt-get -y update
+        sudo -E apt-get -y purge azure-cli ghc* zulu* llvm* firefox google* dotnet* powershell openjdk* mongodb* moby* || true
+        
+        # 3. 安装依赖环境
+        sudo -E apt-get -y install $(curl -fsSL https://raw.githubusercontent.com/ophub/amlogic-s9xxx-armbian/refs/heads/main/compile-kernel/tools/script/ubuntu2204-build-armbian-depends)
+        sudo -E systemctl daemon-reload
+        sudo -E apt-get -y autoremove --purge
+        sudo -E apt-get clean
+        
+        sudo timedatectl set-timezone "${TZ}"
+        sudo mkdir -p /workdir
+        sudo chown ${USER}:${GROUPS} /workdir
+        echo "status=success" >> ${GITHUB_OUTPUT}
 
     - name: Clone source code
       working-directory: /workdir
+      if: steps.Initialization-environment.outputs.status == 'success'
       run: |
         df -hT $PWD
         git clone $REPO_URL -b $REPO_BRANCH openwrt
@@ -118,11 +128,11 @@ jobs:
         echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
 
     - name: Check space usage
-      if: (!cancelled())
+      if: always()
       run: df -hT
 
     - name: Upload bin directory
-      uses: actions/upload-artifact@main
+      uses: actions/upload-artifact@v4
       if: steps.compile.outputs.status == 'success' && env.UPLOAD_BIN_DIR == 'true'
       with:
         name: OpenWrt_bin${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
@@ -130,41 +140,48 @@ jobs:
 
     - name: Organize files
       id: organize
-      if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
+      # 极其关键：把 !cancelled() 改为只有编译成功才运行
+      if: steps.compile.outputs.status == 'success' && env.UPLOAD_FIRMWARE == 'true'
       run: |
-        cd openwrt/bin/targets/*/*
-        rm -rf packages
-        echo "FIRMWARE=$PWD" >> $GITHUB_ENV
-        echo "status=success" >> $GITHUB_OUTPUT
+        # 加入防错逻辑，确保目录存在再进入，防止操作根目录
+        if [ -d "openwrt/bin/targets" ]; then
+          cd openwrt/bin/targets/*/* || exit 1
+          rm -rf packages
+          echo "FIRMWARE=$PWD" >> $GITHUB_ENV
+          echo "status=success" >> $GITHUB_OUTPUT
+        else
+          echo "Error: Firmware directory not found!"
+          exit 1
+        fi
 
     - name: Upload firmware directory
-      uses: actions/upload-artifact@main
-      if: steps.organize.outputs.status == 'success' && !cancelled()
+      uses: actions/upload-artifact@v4
+      if: steps.organize.outputs.status == 'success'
       with:
         name: OpenWrt_firmware${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
         path: ${{ env.FIRMWARE }}
 
     - name: Upload firmware to cowtransfer
       id: cowtransfer
-      if: steps.organize.outputs.status == 'success' && env.UPLOAD_COWTRANSFER == 'true' && !cancelled()
+      if: steps.organize.outputs.status == 'success' && env.UPLOAD_COWTRANSFER == 'true'
       run: |
-        curl -fsSL git.io/file-transfer | sh
+        # 修复已废弃的 git.io 短链接
+        curl -fsSL https://raw.githubusercontent.com/Mikubill/transfer/master/install.sh | sh
         ./transfer cow --block 2621440 -s -p 64 --no-progress ${FIRMWARE} 2>&1 | tee cowtransfer.log
-        echo "::warning file=cowtransfer.com::$(cat cowtransfer.log | grep https)"
-        echo "url=$(cat cowtransfer.log | grep https | cut -f3 -d" ")"
+        echo "url=$(cat cowtransfer.log | grep https | cut -f3 -d" ")" >> $GITHUB_OUTPUT
 
     - name: Upload firmware to WeTransfer
       id: wetransfer
-      if: steps.organize.outputs.status == 'success' && env.UPLOAD_WETRANSFER == 'true' && !cancelled()
+      if: steps.organize.outputs.status == 'success' && env.UPLOAD_WETRANSFER == 'true'
       run: |
-        curl -fsSL git.io/file-transfer | sh
+        # 修复已废弃的 git.io 短链接
+        curl -fsSL https://raw.githubusercontent.com/Mikubill/transfer/master/install.sh | sh
         ./transfer wet -s -p 16 --no-progress ${FIRMWARE} 2>&1 | tee wetransfer.log
-        echo "::warning file=wetransfer.com::$(cat wetransfer.log | grep https)"
-        echo "url=$(cat wetransfer.log | grep https | cut -f3 -d" ")"
+        echo "url=$(cat wetransfer.log | grep https | cut -f3 -d" ")" >> $GITHUB_OUTPUT
 
     - name: Generate release tag
       id: tag
-      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
+      if: steps.organize.outputs.status == 'success' && env.UPLOAD_RELEASE == 'true'
       run: |
         echo "release_tag=$(date +"%Y.%m.%d-%H%M")" >> $GITHUB_OUTPUT
         touch release.txt
@@ -173,8 +190,8 @@ jobs:
         echo "status=success" >> $GITHUB_OUTPUT
 
     - name: Upload firmware to release
-      uses: softprops/action-gh-release@v1
-      if: steps.tag.outputs.status == 'success' && !cancelled()
+      uses: softprops/action-gh-release@v2 # 升级至 v2
+      if: steps.tag.outputs.status == 'success'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
@@ -184,13 +201,14 @@ jobs:
 
     - name: Delete workflow runs
       uses: GitRML/delete-workflow-runs@main
+      if: always()
       with:
-        retain_days: 1
+        retain_days: 3
         keep_minimum_runs: 3
 
     - name: Remove old Releases
-      uses: dev-drprasad/delete-older-releases@v0.2.1
-      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
+      uses: dev-drprasad/delete-older-releases@v0.3.3 # 升级至最新版
+      if: steps.tag.outputs.status == 'success'
       with:
         keep_latest: 3
         delete_tags: true
