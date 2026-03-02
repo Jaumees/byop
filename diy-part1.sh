@@ -19,13 +19,21 @@ echo 'src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-pass
 echo 'src-git passwall_luci https://github.com/Openwrt-Passwall/openwrt-passwall.git;main' >> feeds.conf.default
 echo 'src-git mosdns https://github.com/QiuSimons/openwrt-mos.git;master' >> feeds.conf.default
 
-# =========================================================
-# 添加自定义插件 (不放入 feeds，放入 package/custom 避免冲突)
-# =========================================================
-mkdir -p package/custom
+WORKINGDIR="`pwd`/feeds/packages/net/smartdns"
+mkdir $WORKINGDIR -p
+rm $WORKINGDIR/* -fr
+wget https://github.com/pymumu/openwrt-smartdns/archive/master.zip -O $WORKINGDIR/master.zip
+unzip $WORKINGDIR/master.zip -d $WORKINGDIR
+mv $WORKINGDIR/openwrt-smartdns-master/* $WORKINGDIR/
+rmdir $WORKINGDIR/openwrt-smartdns-master
+rm $WORKINGDIR/master.zip
 
-# 添加 smartdns 核心
-git clone --depth=1 -b master https://github.com/pymumu/openwrt-smartdns package/custom/smartdns
-
-# 添加 luci-app-smartdns (使用 lede 分支以适配 coolsnowwolf/lede 源码)
-git clone --depth=1 -b master https://github.com/pymumu/luci-app-smartdns package/custom/luci-app-smartdns
+LUCIBRANCH="master"
+WORKINGDIR="`pwd`/feeds/luci/applications/luci-app-smartdns"
+mkdir $WORKINGDIR -p
+rm $WORKINGDIR/* -fr
+wget https://github.com/pymumu/luci-app-smartdns/archive/${LUCIBRANCH}.zip -O $WORKINGDIR/${LUCIBRANCH}.zip
+unzip $WORKINGDIR/${LUCIBRANCH}.zip -d $WORKINGDIR
+mv $WORKINGDIR/luci-app-smartdns-${LUCIBRANCH}/* $WORKINGDIR/
+rmdir $WORKINGDIR/luci-app-smartdns-${LUCIBRANCH}
+rm $WORKINGDIR/${LUCIBRANCH}.zip
